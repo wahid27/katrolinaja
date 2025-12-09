@@ -4,11 +4,12 @@ import { Plus, Trash2, Save, RotateCcw, TrendingUp, Users, Calculator, AlertCirc
 const GradeAdjuster = () => {
   // --- STATE DATA ---
   const [students, setStudents] = useState([
-    { id: 1, name: "Andi (Range Bawah)", originalScore: 25 },
-    { id: 2, name: "Budi (Range Tengah)", originalScore: 55 },
-    { id: 3, name: "Citra (Range Atas)", originalScore: 65 },
-    { id: 4, name: "Dewi (Poin Spesifik)", originalScore: 80 },
-    { id: 5, name: "Eko (Nilai Tinggi)", originalScore: 92 },
+    { id: 1, name: "Andi (Sangat Rendah)", originalScore: 19 },
+    { id: 2, name: "Budi (Rendah)", originalScore: 30 },
+    { id: 3, name: "Citra (Menengah)", originalScore: 50 },
+    { id: 4, name: "Dewi (Hampir Lulus)", originalScore: 68 },
+    { id: 5, name: "Eko (Lulus Murni)", originalScore: 78 },
+    { id: 6, name: "Fajar (Pintar)", originalScore: 92 },
   ]);
 
   const [newName, setNewName] = useState("");
@@ -23,14 +24,14 @@ const GradeAdjuster = () => {
 
   // --- CONFIG STATE ---
   const [kkm, setKkm] = useState(70);
-  // Mode: 'staged', 'linear', atau 'table' (baru)
-  const [logicMode, setLogicMode] = useState('table'); // Default ke tabel sesuai request terakhir
+  // Mode: 'staged', 'linear', atau 'table'
+  const [logicMode, setLogicMode] = useState('staged'); 
   
   // Config Linear/Staged
   const [targetMax, setTargetMax] = useState(80); 
   const [flatThreshold, setFlatThreshold] = useState(30); 
   const [remedialCap, setRemedialCap] = useState(78); 
-  const [boostPassed, setBoostPassed] = useState(false);
+  const [boostPassed, setBoostPassed] = useState(false); // Hanya untuk mode Linear
 
   // --- EFFECT: Auto Hide Notification ---
   useEffect(() => {
@@ -50,15 +51,13 @@ const GradeAdjuster = () => {
   const calculateFinalScore = (original) => {
     const score = parseFloat(original);
     
-    // --- MODE 3: TABEL KUSTOM (REQUEST USER) ---
+    // --- MODE 3: TABEL KUSTOM (MANUAL) ---
     if (logicMode === 'table') {
-      // Range Groups
       if (score >= 20 && score <= 40) return 75;
       if (score >= 41 && score <= 60) return 76;
       if (score >= 61 && score <= 70) return 77;
       if (score >= 71 && score <= 75) return 78;
       
-      // Specific Points Mapping
       const mapping = {
         76: 79, 77: 80, 78: 81, 79: 82, 80: 83,
         81: 84, 82: 85, 83: 86, 84: 87, 85: 88,
@@ -67,42 +66,62 @@ const GradeAdjuster = () => {
       };
 
       if (mapping[score] !== undefined) return mapping[score];
-
-      // Handle edge cases (di luar tabel)
-      if (score < 20) return 75; // Asumsi: nilai < 20 dianggap sama dengan range terendah
-      if (score > 95) return score; // Nilai > 95 tetap (atau 100)
-      
+      if (score < 20) return 75; 
+      if (score > 95) return score; 
       return score;
     }
 
-    // --- MODE 1 & 2: LOGIKA MATEMATIS ---
-    if (score >= kkm) {
-      return boostPassed ? Math.max(score, remedialCap + 1) : score;
-    }
-
-    let finalScore = score;
-    const minOriginalScore = students.length > 0 ? Math.min(...students.map(s => s.originalScore)) : 0;
-
+    // --- MODE 1: BERTINGKAT (STAGED - UPDATE ADIL) ---
     if (logicMode === 'staged') {
+      // Tahap 1: Nilai Sangat Rendah (0 - Batas Bawah) -> Jadi KKM
       if (score <= flatThreshold) {
-        finalScore = kkm;
-      } else {
+        return kkm;
+      } 
+      // Tahap 2: Nilai Remedial (Batas Bawah - KKM) -> Naik ke [KKM - RemedialCap]
+      else if (score <= kkm) {
         const rangeInput = kkm - flatThreshold; 
         const rangeOutput = remedialCap - kkm;  
-        if (rangeInput <= 0) return kkm; 
+        if (rangeInput <= 0) return kkm;
+        
         const progress = (score - flatThreshold) / rangeInput;
-        finalScore = kkm + (progress * rangeOutput);
+        return Math.round(kkm + (progress * rangeOutput));
+      } 
+      // Tahap 3: Nilai Lulus (KKM - 100) -> Naik ke [RemedialCap - 100]
+      // INI UPDATE BARU: Agar siswa pintar tetap dapat bonus dan tidak tersalip
+      else {
+        const rangeInput = 100 - kkm; // Sisa rentang nilai asli
+        const rangeOutput = 100 - remedialCap; // Sisa rentang nilai tujuan
+        
+        if (rangeInput <= 0) return 100;
+
+        const progress = (score - kkm) / rangeInput;
+        // Start dari RemedialCap agar nyambung grafiknya
+        let final = remedialCap + (progress * rangeOutput); 
+        return Math.round(final);
       }
-    } 
-    else { // Linear
-      let x1 = minOriginalScore;
-      let y1 = kkm;
-      let x2 = kkm; 
-      let y2 = targetMax;
-      if (x2 === x1) return Math.max(score, kkm);
-      const m = (y2 - y1) / (x2 - x1);
-      finalScore = y1 + m * (score - x1);
     }
+
+    // --- MODE 2: LINEAR BIASA (LAMA) ---
+    // Di mode ini, user bisa pilih mau boost yang lulus atau tidak lewat checkbox
+    if (score >= kkm && !boostPassed) return score;
+
+    let x1 = 0; // Default
+    // Cari min score dari data yg ada untuk anchor bawah
+    // (Dalam konteks React state, kita perlu akses state students, tapi di sini simplified)
+    // Kita pakai minOriginalScore dari useMemo di parent component biasanya, 
+    // tapi karena fungsi ini butuh self-contained, kita pakai default logic atau parameter.
+    // Agar aman kita pakai minOriginalScore global (perlu dipassing atau diakses dari scope)
+    // *Di sini kita akses students state langsung karena ada di dalam component*
+    const minVal = students.length > 0 ? Math.min(...students.map(s => s.originalScore)) : 0;
+    
+    let y1 = kkm;
+    let x2 = kkm; 
+    let y2 = targetMax;
+
+    if (x2 === minVal) return Math.max(score, kkm); // Safety
+
+    const m = (y2 - y1) / (x2 - minVal);
+    let finalScore = y1 + m * (score - minVal);
 
     finalScore = Math.round(finalScore);
     if (finalScore > 100) finalScore = 100;
@@ -116,7 +135,7 @@ const GradeAdjuster = () => {
   const handleProcess = () => {
     setIsProcessed(true);
     let modeName = 'Linear';
-    if (logicMode === 'staged') modeName = 'Bertingkat';
+    if (logicMode === 'staged') modeName = 'Bertingkat (Adil)';
     if (logicMode === 'table') modeName = 'Tabel Manual';
     showToast('success', `Nilai berhasil dihitung dengan Mode ${modeName}`);
   };
@@ -185,6 +204,7 @@ const GradeAdjuster = () => {
     csvContent += "Siswa A,25\n";
     csvContent += "Siswa B,55\n";
     csvContent += "Siswa C,80\n";
+    csvContent += "Siswa D,92\n";
     
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -294,23 +314,21 @@ const GradeAdjuster = () => {
             <button onClick={() => setShowTutorial(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X className="w-6 h-6" /></button>
             <h2 className="text-xl font-bold text-indigo-700 mb-4 flex items-center gap-2"><Sliders className="w-6 h-6" /> Perbedaan Mode Logika</h2>
             <div className="space-y-4 text-sm text-slate-600">
-              <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-                <h3 className="font-bold text-green-800 mb-1 flex items-center gap-2"><Table className="w-4 h-4" /> 3. Mode Tabel (Aktif)</h3>
-                <p>Nilai dikonversi berdasarkan tabel baku:</p>
+              <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+                <h3 className="font-bold text-indigo-800 mb-1">1. Mode Bertingkat (Disarankan)</h3>
+                <p>Paling Adil. Nilai rendah ditarik ke KKM. Nilai tinggi ikut naik sedikit agar tidak tersalip.</p>
                 <ul className="list-disc pl-4 mt-1 space-y-1 text-xs">
-                  <li>20-40 &rarr; 75</li>
-                  <li>41-60 &rarr; 76</li>
-                  <li>61-70 &rarr; 77</li>
-                  <li>Dst (sesuai tabel)</li>
+                  <li>0 - Batas Bawah &rarr; Jadi KKM</li>
+                  <li>KKM - 100 &rarr; Ikut naik proporsional</li>
                 </ul>
               </div>
-              <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100">
-                <h3 className="font-bold text-indigo-800 mb-1">1. Mode Bertingkat</h3>
-                <p>Menggunakan ambang batas bawah dan atas. Cocok untuk Kurikulum Merdeka.</p>
+              <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                <h3 className="font-bold text-green-800 mb-1 flex items-center gap-2">3. Mode Tabel</h3>
+                <p>Menggunakan tabel konversi baku (20-40=75, dst).</p>
               </div>
               <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
                 <h3 className="font-bold text-slate-800 mb-1">2. Mode Linear</h3>
-                <p>Semua nilai ditarik garis lurus proporsional.</p>
+                <p>Semua nilai ditarik garis lurus biasa.</p>
               </div>
             </div>
           </div>
@@ -384,8 +402,6 @@ const GradeAdjuster = () => {
                           <tr className="border-b"><td className="py-1 font-semibold">61 - 70</td><td className="text-right font-bold text-green-600">77</td></tr>
                           <tr className="border-b"><td className="py-1 font-semibold">71 - 75</td><td className="text-right font-bold text-green-600">78</td></tr>
                           <tr className="border-b"><td className="py-1">76</td><td className="text-right">79</td></tr>
-                          <tr className="border-b"><td className="py-1">77</td><td className="text-right">80</td></tr>
-                          <tr className="border-b"><td className="py-1">78</td><td className="text-right">81</td></tr>
                           <tr className="border-b"><td className="py-1">...</td><td className="text-right">...</td></tr>
                           <tr><td className="py-1">95</td><td className="text-right">95</td></tr>
                         </tbody>
@@ -416,6 +432,9 @@ const GradeAdjuster = () => {
                           <span className="text-xs text-slate-500">Nilai remedial tidak akan &gt; {remedialCap}</span>
                         </div>
                       </div>
+                      <p className="text-[10px] text-indigo-600 italic mt-2">
+                        *Siswa yang nilainya &gt; {kkm} (Lulus Murni) akan otomatis naik sedikit dari {remedialCap} s.d. 100 agar adil.
+                      </p>
                     </div>
                   ) : (
                     <div className="space-y-4 animate-fade-in bg-slate-50 p-4 rounded-lg border border-slate-200">
@@ -527,7 +546,7 @@ const GradeAdjuster = () => {
 
         {/* FOOTER */}
         <div className="mt-12 mb-6 text-center space-y-4">
-          <p className="text-slate-400 text-sm">&copy; {new Date().getFullYear()} Smart Grade Adjuster | created by: Wahid Amiruddin </p>
+          <p className="text-slate-400 text-sm">&copy; {new Date().getFullYear()} Smart Grade Adjuster. created by: Wahid Amiruddin M.</p>
           <a href="https://wa.me/6282228398585?text=Halo%20saya%20butuh%20bantuan" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2 bg-green-500 hover:bg-green-600 text-white rounded-full font-medium shadow-md hover:shadow-lg transition-transform hover:-translate-y-1 text-sm"><MessageCircle className="w-4 h-4" /> Support Pembuatnya</a>
         </div>
       </div>
