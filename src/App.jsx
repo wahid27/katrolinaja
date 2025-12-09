@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, Trash2, Save, RotateCcw, TrendingUp, Users, Calculator, AlertCircle, Download, Upload, FileSpreadsheet, Play, CheckCircle, HelpCircle, X, AlertTriangle, MessageCircle, Heart, Settings, Sliders, Youtube, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, Save, RotateCcw, TrendingUp, Users, Calculator, AlertCircle, Download, Upload, FileSpreadsheet, Play, CheckCircle, HelpCircle, X, AlertTriangle, MessageCircle, Heart, Settings, Sliders, Youtube, ExternalLink, Table } from 'lucide-react';
 
 const GradeAdjuster = () => {
   // --- STATE DATA ---
   const [students, setStudents] = useState([
-    { id: 1, name: "Andi (Sangat Rendah)", originalScore: 19 },
-    { id: 2, name: "Budi (Rendah)", originalScore: 30 },
-    { id: 3, name: "Citra (Menengah)", originalScore: 50 },
-    { id: 4, name: "Dewi (Hampir Lulus)", originalScore: 68 },
-    { id: 5, name: "Eko (Lulus Murni)", originalScore: 78 },
+    { id: 1, name: "Andi (Range Bawah)", originalScore: 25 },
+    { id: 2, name: "Budi (Range Tengah)", originalScore: 55 },
+    { id: 3, name: "Citra (Range Atas)", originalScore: 65 },
+    { id: 4, name: "Dewi (Poin Spesifik)", originalScore: 80 },
+    { id: 5, name: "Eko (Nilai Tinggi)", originalScore: 92 },
   ]);
 
   const [newName, setNewName] = useState("");
@@ -18,12 +18,15 @@ const GradeAdjuster = () => {
   // State UI
   const [isProcessed, setIsProcessed] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
-  const [showVideoModal, setShowVideoModal] = useState(false); // State untuk Modal Video
+  const [showVideoModal, setShowVideoModal] = useState(false); 
   const [notification, setNotification] = useState(null); 
 
   // --- CONFIG STATE ---
   const [kkm, setKkm] = useState(70);
-  const [logicMode, setLogicMode] = useState('staged'); 
+  // Mode: 'staged', 'linear', atau 'table' (baru)
+  const [logicMode, setLogicMode] = useState('table'); // Default ke tabel sesuai request terakhir
+  
+  // Config Linear/Staged
   const [targetMax, setTargetMax] = useState(80); 
   const [flatThreshold, setFlatThreshold] = useState(30); 
   const [remedialCap, setRemedialCap] = useState(78); 
@@ -44,19 +47,41 @@ const GradeAdjuster = () => {
   };
 
   // --- ALGORITMA KATROL ---
-  const minOriginalScore = useMemo(() => {
-    if (students.length === 0) return 0;
-    return Math.min(...students.map(s => s.originalScore));
-  }, [students]);
-
   const calculateFinalScore = (original) => {
     const score = parseFloat(original);
     
+    // --- MODE 3: TABEL KUSTOM (REQUEST USER) ---
+    if (logicMode === 'table') {
+      // Range Groups
+      if (score >= 20 && score <= 40) return 75;
+      if (score >= 41 && score <= 60) return 76;
+      if (score >= 61 && score <= 70) return 77;
+      if (score >= 71 && score <= 75) return 78;
+      
+      // Specific Points Mapping
+      const mapping = {
+        76: 79, 77: 80, 78: 81, 79: 82, 80: 83,
+        81: 84, 82: 85, 83: 86, 84: 87, 85: 88,
+        86: 89, 87: 90, 88: 91, 89: 92, 90: 93,
+        91: 93, 92: 94, 93: 94, 94: 95, 95: 95
+      };
+
+      if (mapping[score] !== undefined) return mapping[score];
+
+      // Handle edge cases (di luar tabel)
+      if (score < 20) return 75; // Asumsi: nilai < 20 dianggap sama dengan range terendah
+      if (score > 95) return score; // Nilai > 95 tetap (atau 100)
+      
+      return score;
+    }
+
+    // --- MODE 1 & 2: LOGIKA MATEMATIS ---
     if (score >= kkm) {
       return boostPassed ? Math.max(score, remedialCap + 1) : score;
     }
 
     let finalScore = score;
+    const minOriginalScore = students.length > 0 ? Math.min(...students.map(s => s.originalScore)) : 0;
 
     if (logicMode === 'staged') {
       if (score <= flatThreshold) {
@@ -64,19 +89,16 @@ const GradeAdjuster = () => {
       } else {
         const rangeInput = kkm - flatThreshold; 
         const rangeOutput = remedialCap - kkm;  
-        
         if (rangeInput <= 0) return kkm; 
-
         const progress = (score - flatThreshold) / rangeInput;
         finalScore = kkm + (progress * rangeOutput);
       }
     } 
-    else {
+    else { // Linear
       let x1 = minOriginalScore;
       let y1 = kkm;
       let x2 = kkm; 
       let y2 = targetMax;
-
       if (x2 === x1) return Math.max(score, kkm);
       const m = (y2 - y1) / (x2 - x1);
       finalScore = y1 + m * (score - x1);
@@ -93,7 +115,10 @@ const GradeAdjuster = () => {
   // --- HANDLERS ---
   const handleProcess = () => {
     setIsProcessed(true);
-    showToast('success', 'Nilai berhasil diproses dengan logika ' + (logicMode === 'staged' ? 'Bertingkat' : 'Linear'));
+    let modeName = 'Linear';
+    if (logicMode === 'staged') modeName = 'Bertingkat';
+    if (logicMode === 'table') modeName = 'Tabel Manual';
+    showToast('success', `Nilai berhasil dihitung dengan Mode ${modeName}`);
   };
 
   const addStudent = (e) => {
@@ -157,9 +182,9 @@ const GradeAdjuster = () => {
   const downloadTemplate = () => {
     let csvContent = "data:text/csv;charset=utf-8,";
     csvContent += "Nama Siswa,Nilai Original\n";
-    csvContent += "Siswa A,19\n";
-    csvContent += "Siswa B,30\n";
-    csvContent += "Siswa C,50\n";
+    csvContent += "Siswa A,25\n";
+    csvContent += "Siswa B,55\n";
+    csvContent += "Siswa C,80\n";
     
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -229,58 +254,32 @@ const GradeAdjuster = () => {
         </div>
       )}
 
-      {/* --- VIDEO MODAL (RESPONSIVE & SCROLLABLE FIX) --- */}
+      {/* --- VIDEO MODAL --- */}
       {showVideoModal && (
         <div 
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-fade-in"
           onClick={() => setShowVideoModal(false)}
         >
-          {/* Perbaikan di sini:
-              1. max-h-[85vh]: Tinggi maksimal modal 85% layar.
-              2. flex-col & overflow-hidden: Agar struktur rapi.
-          */}
           <div 
             className="bg-slate-900 rounded-2xl overflow-hidden shadow-2xl w-full max-w-[340px] max-h-[85vh] flex flex-col relative border border-slate-700"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header Sticky di atas - Tombol Close dipindah kesini */}
             <div className="p-3 bg-slate-900/95 backdrop-blur-sm flex justify-between items-center border-b border-slate-700 sticky top-0 z-20 shrink-0">
               <span className="text-white text-xs font-bold bg-red-600 px-3 py-1 rounded-full shadow-lg flex items-center gap-1">
                 <Youtube className="w-3 h-3 fill-white" /> Tutorial
               </span>
-              <button 
-                onClick={() => setShowVideoModal(false)}
-                className="bg-white/10 hover:bg-white/20 text-white rounded-full p-1.5 transition-colors"
-              >
+              <button onClick={() => setShowVideoModal(false)} className="bg-white/10 hover:bg-white/20 text-white rounded-full p-1.5 transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
-            {/* Area Scrollable untuk Konten (Video + Footer) */}
             <div className="overflow-y-auto flex-1 bg-black custom-scrollbar">
-              {/* Video Wrapper */}
               <div className="w-full aspect-[9/16] bg-black">
-                <iframe 
-                  className="w-full h-full"
-                  src="https://www.youtube.com/embed/uqPzvpMqx8I" 
-                  title="Tutorial Smart Grade Adjuster" 
-                  frameBorder="0" 
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                  allowFullScreen
-                ></iframe>
+                <iframe className="w-full h-full" src="https://www.youtube.com/embed/uqPzvpMqx8I" title="Tutorial Smart Grade Adjuster" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen></iframe>
               </div>
-
-              {/* Footer Modal */}
               <div className="p-4 bg-slate-800 text-center border-t border-slate-700">
                 <p className="text-slate-400 text-xs mb-2">Video tidak muncul?</p>
-                <a 
-                  href="https://youtube.com/shorts/uqPzvpMqx8I" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-bold transition-colors w-full justify-center"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  Buka di YouTube
+                <a href="https://youtube.com/shorts/uqPzvpMqx8I" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-bold transition-colors w-full justify-center">
+                  <ExternalLink className="w-4 h-4" /> Buka di YouTube
                 </a>
               </div>
             </div>
@@ -295,18 +294,23 @@ const GradeAdjuster = () => {
             <button onClick={() => setShowTutorial(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X className="w-6 h-6" /></button>
             <h2 className="text-xl font-bold text-indigo-700 mb-4 flex items-center gap-2"><Sliders className="w-6 h-6" /> Perbedaan Mode Logika</h2>
             <div className="space-y-4 text-sm text-slate-600">
-              <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100">
-                <h3 className="font-bold text-indigo-800 mb-1">1. Mode Bertingkat (Disarankan)</h3>
-                <p>Cocok untuk Kurikulum Merdeka yang adil.</p>
-                <ul className="list-disc pl-4 mt-1 space-y-1">
-                  <li>Nilai 0 s.d <b>Batas Bawah</b> (misal 30) otomatis menjadi <b>KKM</b>.</li>
-                  <li>Nilai 31 s.d &lt; KKM, akan naik secara bertahap tapi <b>dibatasi</b> (misal max 78).</li>
-                  <li>Siswa remedial tidak akan menyalip siswa yang lulus murni.</li>
+              <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                <h3 className="font-bold text-green-800 mb-1 flex items-center gap-2"><Table className="w-4 h-4" /> 3. Mode Tabel (Aktif)</h3>
+                <p>Nilai dikonversi berdasarkan tabel baku:</p>
+                <ul className="list-disc pl-4 mt-1 space-y-1 text-xs">
+                  <li>20-40 &rarr; 75</li>
+                  <li>41-60 &rarr; 76</li>
+                  <li>61-70 &rarr; 77</li>
+                  <li>Dst (sesuai tabel)</li>
                 </ul>
               </div>
+              <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+                <h3 className="font-bold text-indigo-800 mb-1">1. Mode Bertingkat</h3>
+                <p>Menggunakan ambang batas bawah dan atas. Cocok untuk Kurikulum Merdeka.</p>
+              </div>
               <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <h3 className="font-bold text-slate-800 mb-1">2. Mode Linear (Lama)</h3>
-                <p>Semua nilai di bawah KKM ditarik garis lurus ke target tertentu.</p>
+                <h3 className="font-bold text-slate-800 mb-1">2. Mode Linear</h3>
+                <p>Semua nilai ditarik garis lurus proporsional.</p>
               </div>
             </div>
           </div>
@@ -325,16 +329,9 @@ const GradeAdjuster = () => {
             <p className="text-slate-500 mt-1">Sistem Katrol Nilai (Support Kurikulum Merdeka)</p>
           </div>
           <div className="mt-4 md:mt-0 flex gap-2 flex-wrap items-center">
-            
-            {/* TOMBOL VIDEO TUTORIAL */}
-            <button 
-              onClick={() => setShowVideoModal(true)} 
-              className="flex items-center gap-2 px-4 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm font-bold border border-red-200 transition-all hover:shadow-sm"
-            >
-              <Youtube className="w-5 h-5 fill-current" />
-              Video Tutorial
+            <button onClick={() => setShowVideoModal(true)} className="flex items-center gap-2 px-4 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm font-bold border border-red-200 transition-all hover:shadow-sm">
+              <Youtube className="w-5 h-5 fill-current" /> Video Tutorial
             </button>
-
             <button onClick={() => setShowTutorial(true)} className="flex items-center gap-2 px-4 py-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-sm font-medium border border-indigo-200">
               <HelpCircle className="w-4 h-4" /> Info Mode
             </button>
@@ -356,55 +353,80 @@ const GradeAdjuster = () => {
                 Pengaturan Logika
               </h2>
               
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-slate-700 mb-1">KKM Sekolah</label>
-                <input type="number" value={kkm} onChange={(e) => setKkm(Number(e.target.value))} className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-lg text-indigo-700" />
-              </div>
-
-              {/* TOGGLE MODE */}
-              <div className="flex bg-slate-100 p-1 rounded-lg mb-4">
-                <button 
-                  onClick={() => { setLogicMode('staged'); setIsProcessed(false); }}
-                  className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${logicMode === 'staged' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Mode Bertingkat
+              {/* TOGGLE MODE (3 OPTIONS) */}
+              <div className="flex bg-slate-100 p-1 rounded-lg mb-6">
+                <button onClick={() => { setLogicMode('staged'); setIsProcessed(false); }} className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-md transition-all ${logicMode === 'staged' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                  Bertingkat
                 </button>
-                <button 
-                  onClick={() => { setLogicMode('linear'); setIsProcessed(false); }}
-                  className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${logicMode === 'linear' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Mode Linear
+                <button onClick={() => { setLogicMode('linear'); setIsProcessed(false); }} className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-md transition-all ${logicMode === 'linear' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                  Linear
+                </button>
+                <button onClick={() => { setLogicMode('table'); setIsProcessed(false); }} className={`flex-1 py-2 text-[10px] sm:text-xs font-bold rounded-md transition-all ${logicMode === 'table' ? 'bg-green-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                  Tabel (Baru)
                 </button>
               </div>
 
-              {logicMode === 'staged' ? (
-                <div className="space-y-4 animate-fade-in bg-indigo-50 p-4 rounded-lg border border-indigo-100">
-                   <div>
-                    <label className="block text-xs font-bold text-indigo-800 mb-1">Batas Bawah Flat (Floor)</label>
-                    <div className="flex items-center gap-2">
-                      <input type="number" value={flatThreshold} onChange={(e) => setFlatThreshold(Number(e.target.value))} className="w-20 border border-indigo-200 rounded p-1 text-sm" />
-                      <span className="text-xs text-slate-500">Nilai &le; {flatThreshold} otomatis jadi {kkm}</span>
+              {/* SETTINGS DISPLAY BASED ON MODE */}
+              {logicMode === 'table' ? (
+                 <div className="space-y-4 animate-fade-in bg-green-50 p-4 rounded-lg border border-green-100">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Table className="w-5 h-5 text-green-700" />
+                      <h3 className="font-bold text-green-800 text-sm">Mode Tabel Manual</h3>
                     </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-indigo-800 mb-1">Max Nilai Remedial (Cap)</label>
-                    <div className="flex items-center gap-2">
-                      <input type="number" value={remedialCap} onChange={(e) => setRemedialCap(Number(e.target.value))} className="w-20 border border-indigo-200 rounded p-1 text-sm" />
-                      <span className="text-xs text-slate-500">Nilai remedial tidak akan &gt; {remedialCap}</span>
+                    <p className="text-xs text-green-700 leading-relaxed">
+                      Nilai dihitung berdasarkan tabel konversi yang Anda berikan (20-40=75, dst).
+                    </p>
+                    <div className="bg-white p-2 rounded border border-green-200 h-32 overflow-y-auto text-xs text-slate-600">
+                      <table className="w-full text-left">
+                        <tbody>
+                          <tr className="border-b"><td className="py-1 font-semibold">20 - 40</td><td className="text-right font-bold text-green-600">75</td></tr>
+                          <tr className="border-b"><td className="py-1 font-semibold">41 - 60</td><td className="text-right font-bold text-green-600">76</td></tr>
+                          <tr className="border-b"><td className="py-1 font-semibold">61 - 70</td><td className="text-right font-bold text-green-600">77</td></tr>
+                          <tr className="border-b"><td className="py-1 font-semibold">71 - 75</td><td className="text-right font-bold text-green-600">78</td></tr>
+                          <tr className="border-b"><td className="py-1">76</td><td className="text-right">79</td></tr>
+                          <tr className="border-b"><td className="py-1">77</td><td className="text-right">80</td></tr>
+                          <tr className="border-b"><td className="py-1">78</td><td className="text-right">81</td></tr>
+                          <tr className="border-b"><td className="py-1">...</td><td className="text-right">...</td></tr>
+                          <tr><td className="py-1">95</td><td className="text-right">95</td></tr>
+                        </tbody>
+                      </table>
                     </div>
-                  </div>
-                   <p className="text-[10px] text-indigo-600 italic mt-2">
-                     *Nilai antara {flatThreshold}-{kkm} akan disebar proporsional antara {kkm}-{remedialCap}.
-                   </p>
-                </div>
+                    <p className="text-[10px] text-slate-400 italic">*Setting KKM tidak berpengaruh di mode ini.</p>
+                 </div>
               ) : (
-                <div className="space-y-4 animate-fade-in bg-slate-50 p-4 rounded-lg border border-slate-200">
-                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Target Nilai Maksimal</label>
-                    <input type="number" value={targetMax} onChange={(e) => setTargetMax(Number(e.target.value))} className="w-full border border-slate-300 rounded p-2 text-sm" />
-                    <p className="text-[10px] text-slate-500 mt-1">Nilai mendekati KKM ditarik ke angka ini.</p>
+                <>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">KKM Sekolah</label>
+                    <input type="number" value={kkm} onChange={(e) => setKkm(Number(e.target.value))} className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-lg text-indigo-700" />
                   </div>
-                </div>
+
+                  {logicMode === 'staged' ? (
+                    <div className="space-y-4 animate-fade-in bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+                      <div>
+                        <label className="block text-xs font-bold text-indigo-800 mb-1">Batas Bawah Flat (Floor)</label>
+                        <div className="flex items-center gap-2">
+                          <input type="number" value={flatThreshold} onChange={(e) => setFlatThreshold(Number(e.target.value))} className="w-20 border border-indigo-200 rounded p-1 text-sm" />
+                          <span className="text-xs text-slate-500">Nilai &le; {flatThreshold} otomatis jadi {kkm}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-indigo-800 mb-1">Max Nilai Remedial (Cap)</label>
+                        <div className="flex items-center gap-2">
+                          <input type="number" value={remedialCap} onChange={(e) => setRemedialCap(Number(e.target.value))} className="w-20 border border-indigo-200 rounded p-1 text-sm" />
+                          <span className="text-xs text-slate-500">Nilai remedial tidak akan &gt; {remedialCap}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4 animate-fade-in bg-slate-50 p-4 rounded-lg border border-slate-200">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Target Nilai Maksimal</label>
+                        <input type="number" value={targetMax} onChange={(e) => setTargetMax(Number(e.target.value))} className="w-full border border-slate-300 rounded p-2 text-sm" />
+                        <p className="text-[10px] text-slate-500 mt-1">Nilai mendekati KKM ditarik ke angka ini.</p>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
@@ -440,7 +462,7 @@ const GradeAdjuster = () => {
                    <div className="p-3 bg-amber-100 rounded-full text-amber-600"><AlertCircle className="w-6 h-6" /></div>
                    <div>
                      <h3 className="font-bold text-amber-800">Menunggu Proses</h3>
-                     <p className="text-amber-700 text-xs">Klik tombol untuk menghitung dengan metode <b>{logicMode === 'staged' ? 'Bertingkat' : 'Linear'}</b>.</p>
+                     <p className="text-amber-700 text-xs">Klik tombol untuk menghitung dengan metode <b>{logicMode === 'table' ? 'Tabel Manual' : logicMode === 'staged' ? 'Bertingkat' : 'Linear'}</b>.</p>
                    </div>
                 </div>
                 <button onClick={handleProcess} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow hover:shadow-lg transition-all flex items-center gap-2"><Play className="w-5 h-5 fill-current" /> Hitung Nilai</button>
