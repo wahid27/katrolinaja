@@ -527,8 +527,8 @@ const GradeAdjuster = () => {
 
         {/* FOOTER */}
         <div className="mt-12 mb-6 text-center space-y-4">
-          <p className="text-slate-400 text-sm">&copy; {new Date().getFullYear()} Smart Grade Adjuster. Dibuat dengan <Heart className="w-3 h-3 inline text-red-400 fill-current" /> untuk Pendidikan Indonesia.</p>
-          <a href="https://wa.me/6281234567890?text=Halo%20saya%20butuh%20bantuan" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2 bg-green-500 hover:bg-green-600 text-white rounded-full font-medium shadow-md hover:shadow-lg transition-transform hover:-translate-y-1 text-sm"><MessageCircle className="w-4 h-4" /> Support Pembuatnya</a>
+          <p className="text-slate-400 text-sm">&copy; {new Date().getFullYear()} Smart Grade Adjuster | created by: Wahid Amiruddin </p>
+          <a href="https://wa.me/6282228398585?text=Halo%20saya%20butuh%20bantuan" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2 bg-green-500 hover:bg-green-600 text-white rounded-full font-medium shadow-md hover:shadow-lg transition-transform hover:-translate-y-1 text-sm"><MessageCircle className="w-4 h-4" /> Support Pembuatnya</a>
         </div>
       </div>
     </div>
